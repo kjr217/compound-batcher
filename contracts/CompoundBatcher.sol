@@ -1,0 +1,172 @@
+pragma solidity 0.7.4;
+pragma experimental ABIEncoderV2;
+
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin/contracts/math/SafeMath.sol";
+import {EnumerableSet} from "@openzeppelin/contracts/utils/EnumerableSet.sol";
+import {Counters} from "@openzeppelin/contracts/utils/Counters.sol";
+
+import "../../interfaces/ICErc20.sol";
+
+/**
+ * @title Compound Batcher - batch multiple user's funds to supply to Compound.
+ * @author kjr217
+ */
+
+contract CompoundBatcher {
+    using SafeMath for uint256;
+    using SafeERC20 for IERC20;
+    using EnumerableSet for EnumerableSet.UintSet;
+    using Counters for Counters.Counter;
+
+    struct depositDetails {
+        uint256 cTokenAmount;
+        uint256 tokenAmount;
+    }
+
+    // track the deposit ids that a user has been involved in
+    mapping(address => EnumerableSet.UintSet) private userDepositIds;
+
+    // track the deposit amount for a user for a specific deposit id
+    mapping(address => mapping(uint256 => uint256)) public userDepositAmount;
+
+    // storage for admins
+    mapping(address => bool) public isAdmin;
+
+    // storage for the regular deposits
+    mapping(uint256 => depositDetails) public depositInfo;
+
+    // amount available to deposit to Compound
+    uint256 public toDeposit;
+
+    // address of the compound token associated with the underlying asset
+    address public cToken;
+
+    // address of the underlying asset
+    address public token;
+
+    // has the contract been initiated
+    bool private isInitiated;
+
+    // counter to track the current deposit number
+    Counters.Counter public depositIdTracker;
+
+    event UserDeposited(address indexed user, uint256 amount);
+    event AdminAssigned(address indexed admin);
+    event FundsDepositedToCompound(uint256 amount);
+    event CTokenWithdrawn(address indexed user, uint256 amount);
+
+    /**
+     * @notice modifier to check that configured admin is making the call
+     */
+    modifier onlyAdmin() {
+        require(isAdmin[msg.sender], "Caller must be an admin");
+        _;
+    }
+
+    /**
+     * @notice initiate the contract, this is being used instead of a constructor to make the contract proxyable
+     * @param _cToken the compound token address for this contract
+     * @param _token the underlying asset token address of this contract, associated with _cToken
+     * @param _admin the original admin for this contract
+     */
+    function init(
+        address _cToken,
+        address _token,
+        address _admin
+    ) external
+    {
+        require(!isInitiated, "init: This contract has already been initiated");
+        cToken = _cToken;
+        token = _token;
+        isAdmin[_admin] = true;
+        isInitiated = true;
+    }
+
+    /**
+     * @notice return the current counter number
+     * @return the depositId
+     */
+    function depositIdCounter() public view returns (uint256) {
+        return depositIdTracker.current();
+    }
+
+    /**
+     * @notice assign an admin to the contract to call the compound deposit function
+     * @param _newAdmin the address of the admin to be assigned
+     */
+    function assignAdmin(address _newAdmin) external onlyAdmin {
+        isAdmin[_newAdmin] = true;
+        emit AdminAssigned(_newAdmin);
+    }
+
+    /**
+     * @notice deposit function to place funds to be deposited
+     * @param _amount amount of the token associated with the contract to transfer
+     */
+    function userDeposit(
+        uint256 _amount
+    ) external {
+
+        address token_ = token;
+        toDeposit += _amount;
+        uint256 tracker_ = depositIdTracker.current();
+        userDepositIds[msg.sender].add(tracker_);
+        userDepositAmount[msg.sender][tracker_] += _amount;
+        IERC20(token_).safeTransferFrom(msg.sender, address(this), _amount);
+
+        emit UserDeposited(msg.sender, _amount);
+    }
+
+    /**
+     * @notice function to allow admin to deposit funds to Compound
+     * @dev only callable by an admin, maybe add in fee function to counter the gas costs
+     */
+    function depositToCompound() external onlyAdmin {
+        uint256 toDeposit_ = toDeposit;
+        require(toDeposit_ > 0, "_depositToCompound: no funds to deposit");
+        toDeposit = 0;
+
+        address cToken_ = cToken;
+        uint256 cBalanceBefore = IERC20(cToken_).balanceOf(address(this));
+        // Approve transfer on the ERC20 contract
+        IERC20(token).approve(cToken_, toDeposit_);
+        // Mint cTokens
+        uint256 mintResult =
+            ICErc20(cToken_).mint(toDeposit_);
+        require(mintResult == 0, "_depositToCompound: mintResult error");
+        uint256 cBalanceAfter = IERC20(cToken_).balanceOf(address(this));
+        // determine balance of cTokens received
+        uint256 depositedCToken = cBalanceAfter.sub(cBalanceBefore);
+        depositInfo[depositIdTracker.current()] =
+            depositDetails({cTokenAmount: depositedCToken, tokenAmount: toDeposit_});
+        depositIdTracker.increment();
+
+        emit FundsDepositedToCompound(toDeposit_);
+    }
+
+    /**
+     * @notice function to allow a user to withdraw their cTokens
+     */
+    function userWithdrawCTokens() external {
+        uint256 setLength = userDepositIds[msg.sender].length();
+        require(setLength > 0, "userWithdrawCTokens: msg.sender is not eligible for any allocation");
+        uint256 cTokenAllocation = 0;
+        // go through the enumerable set for the depositIds to determine what cTokens to withdraw.
+        for(uint256 i=0; i < setLength; i++){
+            uint256 depositId = userDepositIds[msg.sender].at(i);
+            uint256 depositAmount = userDepositAmount[msg.sender][depositId];
+            depositDetails memory originalDeposit = depositInfo[depositId];
+            cTokenAllocation += originalDeposit.cTokenAmount
+                    .mul(depositAmount)
+                    .div(originalDeposit.tokenAmount);
+        }
+        for(uint256 i=0; i < setLength; i++){
+            uint256 depositId = userDepositIds[msg.sender].at(0);
+            userDepositIds[msg.sender].remove(depositId);
+        }
+        IERC20(cToken).safeTransferFrom(address(this), msg.sender, cTokenAllocation);
+        emit CTokenWithdrawn(msg.sender, cTokenAllocation);
+    }
+}
