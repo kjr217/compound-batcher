@@ -1,5 +1,5 @@
 import pytest
-import constants_mainnet as constants
+import constants
 import time
 import brownie
 from brownie import Contract

@@ -56,6 +56,7 @@ contract CompoundBatcher {
     event AdminAssigned(address indexed admin);
     event FundsDepositedToCompound(uint256 amount);
     event CTokenWithdrawn(address indexed user, uint256 amount);
+    event FundsWithdrawnBeforeDeposit(address indexed user, uint256 amount);
 
     /**
      * @notice modifier to check that configured admin is making the call
@@ -111,12 +112,29 @@ contract CompoundBatcher {
 
         address token_ = token;
         toDeposit += _amount;
-        uint256 tracker_ = depositIdTracker.current();
-        userDepositIds[msg.sender].add(tracker_);
-        userDepositAmount[msg.sender][tracker_] += _amount;
+        uint256 depositId_ = depositIdTracker.current();
+        userDepositIds[msg.sender].add(depositId_);
+        userDepositAmount[msg.sender][depositId_] += _amount;
         IERC20(token_).safeTransferFrom(msg.sender, address(this), _amount);
 
         emit UserDeposited(msg.sender, _amount);
+    }
+
+    /**
+     * @notice withdraw funds before they are deposited
+     */
+    function userWithdrawBeforeDeposit() external {
+
+        uint256 depositId_ = depositIdTracker.current();
+        uint256 depositAmount = userDepositAmount[msg.sender][depositId_];
+        require(depositAmount > 0, "userWithdrawBeforeDeposit: No funds to withdraw");
+        userDepositAmount[msg.sender][depositId_] = 0;
+        userDepositIds[msg.sender].remove(depositId_);
+        toDeposit.sub(depositAmount);
+
+        IERC20(token).safeTransfer(msg.sender, depositAmount);
+
+        emit FundsWithdrawnBeforeDeposit(msg.sender, depositAmount);
     }
 
     /**
