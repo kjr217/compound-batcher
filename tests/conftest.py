@@ -30,11 +30,11 @@ def uniswap_dai_exchange():
 
 
 @pytest.fixture(scope="function", autouse=True)
-def send_dai_to_accounts(accounts, dai, uniswap_dai_exchange):
+def send_10_eth_of_dai_to_accounts(accounts, dai, uniswap_dai_exchange):
     for account in accounts[:10]:
         uniswap_dai_exchange.ethToTokenSwapInput(
             1,  # minimum amount of tokens to purchase
-            10000000,  # timestamp
+            10000000000,  # timestamp
             {"from": account, "value": "10 ether"},
         )
     yield dai

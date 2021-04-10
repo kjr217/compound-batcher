@@ -6,18 +6,16 @@ import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/EnumerableSet.sol";
 import {Counters} from "@openzeppelin/contracts/utils/Counters.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import "../../interfaces/ICErc20.sol";
 
 /**
  * @title Compound Batcher - batch multiple user's funds to supply to Compound,
-          this version of the contract is more decentralised, as the
-          depositToCompound function is open
+ *        this contract uses an admin to send funds, so is not completely decentralised.
  * @author kjr217
  */
 
-contract CompoundBatcher is ReentrancyGuard {
+contract CompoundBatcherUsesAdmin {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
     using EnumerableSet for EnumerableSet.UintSet;
@@ -52,11 +50,11 @@ contract CompoundBatcher is ReentrancyGuard {
     // has the contract been initiated
     bool private isInitiated;
 
-    // depositor fee
-    uint256 public constant depositorFeeCoefficient = 5e15;
-
     // counter to track the current deposit number
     Counters.Counter public depositIdTracker;
+
+    // depositor fee
+    uint256 public constant depositorFeeCoefficient = 5e15;
 
     event UserDeposited(address indexed user, uint256 amount, uint256 depositId);
     event AdminAssigned(address indexed admin);
@@ -73,11 +71,9 @@ contract CompoundBatcher is ReentrancyGuard {
     }
 
     /**
-     * @notice initiate the contract, this is being used instead
-               of a constructor to make the contract proxyable
+     * @notice initiate the contract, this is being used instead of a constructor to make the contract proxyable
      * @param _cToken the compound token address for this contract
-     * @param _token the underlying asset token address of this contract,
-              associated with _cToken
+     * @param _token the underlying asset token address of this contract, associated with _cToken
      * @param _admin the original admin for this contract
      */
     function init(
@@ -86,8 +82,7 @@ contract CompoundBatcher is ReentrancyGuard {
         address _admin
     ) external
     {
-        require(!isInitiated,
-            "init: This contract has already been initiated");
+        require(!isInitiated, "init: This contract has already been initiated");
         cToken = _cToken;
         token = _token;
         isAdmin[_admin] = true;
@@ -136,8 +131,7 @@ contract CompoundBatcher is ReentrancyGuard {
 
         uint256 depositId_ = depositIdTracker.current();
         uint256 depositAmount = userDepositAmount[msg.sender][depositId_];
-        require(depositAmount > 0,
-            "userWithdrawBeforeDeposit: No funds to withdraw");
+        require(depositAmount > 0, "userWithdrawBeforeDeposit: No funds to withdraw");
         userDepositAmount[msg.sender][depositId_] = 0;
         userDepositIds[msg.sender].remove(depositId_);
         toDeposit.sub(depositAmount);
@@ -148,13 +142,10 @@ contract CompoundBatcher is ReentrancyGuard {
     }
 
     /**
-     * @notice function to allow anyone to deposit funds to Compound
-     * @dev applies a fee, currently changed by the admin.
-            It doesnt make sense for an actor to call this unless the
-            deposit fee is greater than the cumulative gas cost,
-            so it is unlikely that this can be exploited.
+     * @notice function to allow admin to deposit funds to Compound
+     * @dev only callable by an admin, maybe add in fee function to counter the gas costs
      */
-    function depositToCompound() external nonReentrant {
+    function depositToCompound() external onlyAdmin {
 
         uint256 toDeposit_ = toDeposit;
         require(toDeposit_ > 0, "depositToCompound: no funds to deposit");
@@ -189,23 +180,21 @@ contract CompoundBatcher is ReentrancyGuard {
     }
 
     /**
-     * @notice Function to allow a user to withdraw their cTokens
-     * @dev In case that this function hits the block gas limit,
-            an individual depositId redemption function exists.
+     * @notice function to allow a user to withdraw their cTokens
      */
-    function userWithdrawAllCTokens() external {
+    function userWithdrawCTokens() external {
 
         uint256 setLength = userDepositIds[msg.sender].length();
-        require(setLength > 0, "userWithdrawAllCTokens: msg.sender is not eligible for any allocation");
+        require(setLength > 0, "userWithdrawCTokens: msg.sender is not eligible for any allocation");
 
         uint256 cTokenAllocation = 0;
         // go through the enumerable set for the depositIds to determine what cTokens to withdraw.
         for(uint256 i=0; i < setLength; i++){
             uint256 depositId = userDepositIds[msg.sender].at(i);
-            uint256 withdrawAmount = userDepositAmount[msg.sender][depositId];
+            uint256 depositAmount = userDepositAmount[msg.sender][depositId];
             depositDetails memory originalDeposit = depositInfo[depositId];
-            cTokenAllocation += (originalDeposit.cTokenAmount
-                    .mul(withdrawAmount))                   // its here, needs to use the modified balance
+            cTokenAllocation += originalDeposit.cTokenAmount
+                    .mul(depositAmount)
                     .div(originalDeposit.tokenAmount);
         }
         // remove the depositIds from the user
