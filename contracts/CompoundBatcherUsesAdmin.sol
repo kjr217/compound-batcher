@@ -59,9 +59,9 @@ contract CompoundBatcherUsesAdmin {
     event UserDeposited(address indexed user, uint256 amount, uint256 depositId);
     event AdminAssigned(address indexed admin);
     event AdminRemoved(address indexed admin);
-    event FundsDepositedToCompound(uint256 amount);
-    event CTokenWithdrawn(address indexed user, uint256 amount);
-    event FundsWithdrawnBeforeDeposit(address indexed user, uint256 amount);
+    event FundsDepositedToCompound(uint256 amount, uint256 depositId);
+    event CTokenWithdrawn(address indexed user, uint256 amount, uint256 depositId);
+    event FundsWithdrawnBeforeDeposit(address indexed user, uint256 amount, uint256 depositId);
 
     /**
      * @notice modifier to check that configured admin is making the call
@@ -148,7 +148,7 @@ contract CompoundBatcherUsesAdmin {
 
         IERC20(token).safeTransfer(msg.sender, depositAmount);
 
-        emit FundsWithdrawnBeforeDeposit(msg.sender, depositAmount);
+        emit FundsWithdrawnBeforeDeposit(msg.sender, depositAmount, depositId_);
     }
 
     /**
@@ -176,7 +176,8 @@ contract CompoundBatcherUsesAdmin {
         // apply fee
         uint256 depositorFee = (depositedCToken.mul(depositorFeeCoefficient)).div(1e18);
         uint256 realCTokenAmount = depositedCToken.sub(depositorFee);
-        depositInfo[depositIdTracker.current()] =
+        uint256 depositId_ = depositIdTracker.current();
+        depositInfo[depositId_] =
             depositDetails({
                 cTokenAmount: realCTokenAmount,
                 tokenAmount: toDeposit_
@@ -186,7 +187,7 @@ contract CompoundBatcherUsesAdmin {
         // transfer depositorFee to depositor
         IERC20(cToken_).safeTransfer(msg.sender, depositorFee);
 
-        emit FundsDepositedToCompound(toDeposit_);
+        emit FundsDepositedToCompound(toDeposit_, depositId_);
     }
 
     /**
@@ -206,6 +207,7 @@ contract CompoundBatcherUsesAdmin {
             cTokenAllocation += originalDeposit.cTokenAmount
                     .mul(depositAmount)
                     .div(originalDeposit.tokenAmount);
+            emit CTokenWithdrawn(msg.sender, cTokenAllocation, depositId);
         }
         // remove the depositIds from the user
         for(uint256 i=0; i < setLength; i++){
@@ -213,7 +215,6 @@ contract CompoundBatcherUsesAdmin {
             userDepositIds[msg.sender].remove(depositId);
         }
         IERC20(cToken).safeTransferFrom(address(this), msg.sender, cTokenAllocation);
-        emit CTokenWithdrawn(msg.sender, cTokenAllocation);
     }
 
     /**
@@ -229,6 +230,6 @@ contract CompoundBatcherUsesAdmin {
                     .div(originalDeposit.tokenAmount);
         userDepositIds[msg.sender].remove(_depositId);
         IERC20(cToken).safeTransfer(msg.sender, cTokenAllocation);
-        emit CTokenWithdrawn(msg.sender, cTokenAllocation);
+        emit CTokenWithdrawn(msg.sender, cTokenAllocation, _depositId);
     }
 }

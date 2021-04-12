@@ -156,7 +156,7 @@ contract CompoundBatcher is ReentrancyGuard {
 
         IERC20(token).safeTransfer(msg.sender, depositAmount);
 
-        emit FundsWithdrawnBeforeDeposit(msg.sender, depositAmount);
+        emit FundsWithdrawnBeforeDeposit(msg.sender, depositAmount, depositId_);
     }
 
     /**
@@ -187,7 +187,8 @@ contract CompoundBatcher is ReentrancyGuard {
         // apply fee
         uint256 depositorFee = (depositedCToken.mul(depositorFeeCoefficient)).div(1e18);
         uint256 realCTokenAmount = depositedCToken.sub(depositorFee);
-        depositInfo[depositIdTracker.current()] =
+        uint256 depositId_ = depositIdTracker.current();
+        depositInfo[depositId_] =
             depositDetails({
                 cTokenAmount: realCTokenAmount,
                 tokenAmount: toDeposit_
@@ -197,7 +198,7 @@ contract CompoundBatcher is ReentrancyGuard {
         // transfer depositorFee to depositor
         IERC20(cToken_).safeTransfer(msg.sender, depositorFee);
 
-        emit FundsDepositedToCompound(toDeposit_);
+        emit FundsDepositedToCompound(toDeposit_, depositId_);
     }
 
     /**
@@ -217,8 +218,9 @@ contract CompoundBatcher is ReentrancyGuard {
             uint256 withdrawAmount = userDepositAmount[msg.sender][depositId];
             depositDetails memory originalDeposit = depositInfo[depositId];
             cTokenAllocation += (originalDeposit.cTokenAmount
-                    .mul(withdrawAmount))                   // its here, needs to use the modified balance
+                    .mul(withdrawAmount))
                     .div(originalDeposit.tokenAmount);
+            emit CTokenWithdrawn(msg.sender, cTokenAllocation, depositId);
         }
         // remove the depositIds from the user
         for(uint256 i=0; i < setLength; i++){
@@ -226,7 +228,6 @@ contract CompoundBatcher is ReentrancyGuard {
             userDepositIds[msg.sender].remove(depositId);
         }
         IERC20(cToken).safeTransferFrom(address(this), msg.sender, cTokenAllocation);
-        emit CTokenWithdrawn(msg.sender, cTokenAllocation);
     }
 
     /**
@@ -242,6 +243,6 @@ contract CompoundBatcher is ReentrancyGuard {
                     .div(originalDeposit.tokenAmount);
         userDepositIds[msg.sender].remove(_depositId);
         IERC20(cToken).safeTransfer(msg.sender, cTokenAllocation);
-        emit CTokenWithdrawn(msg.sender, cTokenAllocation);
+        emit CTokenWithdrawn(msg.sender, cTokenAllocation, _depositId);
     }
 }
