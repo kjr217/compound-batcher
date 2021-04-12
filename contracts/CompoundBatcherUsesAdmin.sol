@@ -58,6 +58,7 @@ contract CompoundBatcherUsesAdmin {
 
     event UserDeposited(address indexed user, uint256 amount, uint256 depositId);
     event AdminAssigned(address indexed admin);
+    event AdminRemoved(address indexed admin);
     event FundsDepositedToCompound(uint256 amount);
     event CTokenWithdrawn(address indexed user, uint256 amount);
     event FundsWithdrawnBeforeDeposit(address indexed user, uint256 amount);
@@ -104,6 +105,15 @@ contract CompoundBatcherUsesAdmin {
     function assignAdmin(address _newAdmin) external onlyAdmin {
         isAdmin[_newAdmin] = true;
         emit AdminAssigned(_newAdmin);
+    }
+
+    /**
+     * @notice remove an admin to the contract
+     * @param _admin the address of the admin to be removed
+     */
+    function removeAdmin(address _admin) external onlyAdmin {
+        isAdmin[_admin] = false;
+        emit AdminRemoved(_admin);
     }
 
     /**
