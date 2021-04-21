@@ -4,7 +4,6 @@ pragma experimental ABIEncoderV2;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
-import {EnumerableSet} from "@openzeppelin/contracts/utils/EnumerableSet.sol";
 import {Counters} from "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
@@ -19,7 +18,6 @@ import "../../interfaces/ICErc20.sol";
 contract CompoundBatcherV2 is ReentrancyGuard {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
-    using EnumerableSet for EnumerableSet.UintSet;
     using Counters for Counters.Counter;
 
 
