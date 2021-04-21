@@ -15,7 +15,7 @@ import "../../interfaces/ICErc20.sol";
  * @author kjr217
  */
 
-contract CompoundBatcherUsesAdmin {
+contract CompoundBatcherV0 {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
     using EnumerableSet for EnumerableSet.UintSet;

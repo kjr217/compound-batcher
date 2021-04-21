@@ -4,7 +4,7 @@ import time
 import brownie
 from brownie import Contract
 from brownie import (
-    CompoundBatcher
+    CompoundBatcherV2
 )
 
 @pytest.fixture(scope="function", autouse=True)
@@ -42,6 +42,6 @@ def send_10_eth_of_dai_to_accounts(accounts, dai, uniswap_dai_exchange):
 
 @pytest.fixture(scope="function", autouse=True)
 def batcher(dai, accounts, cdai):
-    batcher = CompoundBatcher.deploy({"from": accounts[0]})
-    batcher.init(cdai.address, dai.address, accounts[0], {"from": accounts[0]})
+    batcher = CompoundBatcherV2.deploy({"from": accounts[0]})
+    batcher.init(cdai.address, dai.address, {"from": accounts[0]})
     yield batcher

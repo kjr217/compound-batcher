@@ -17,7 +17,7 @@ import "../../interfaces/ICErc20.sol";
  * @author kjr217
  */
 
-contract CompoundBatcher is ReentrancyGuard {
+contract CompoundBatcherV1 is ReentrancyGuard {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
     using EnumerableSet for EnumerableSet.UintSet;
