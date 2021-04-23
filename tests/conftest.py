@@ -14,17 +14,17 @@ def isolate_func(fn_isolation):
     pass
 
 
-@pytest.fixture(scope="module", autouse=True)
+@pytest.fixture(scope="function", autouse=True)
 def dai():
     yield Contract.from_explorer("0x6B175474E89094C44Da98b954EedeAC495271d0F")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def cdai():
     yield Contract.from_explorer("0x5d3a536e4d6dbd6114cc1ead35777bab948e3643")
 
 
-@pytest.fixture(scope="module", autouse=True)
+@pytest.fixture(scope="function", autouse=True)
 def uniswap_dai_exchange():
     yield Contract.from_explorer("0x2a1530C4C41db0B0b2bB646CB5Eb1A67b7158667")
 
@@ -45,3 +45,12 @@ def batcher(dai, accounts, cdai):
     batcher = CompoundBatcherV2.deploy({"from": accounts[0]})
     batcher.init(cdai.address, dai.address, {"from": accounts[0]})
     yield batcher
+
+@pytest.fixture(scope="function")
+def dai_owned(dai_whale):
+    return Contract.from_explorer("0x6B175474E89094C44Da98b954EedeAC495271d0F", owner=dai_whale)
+
+
+@pytest.fixture(scope="function")
+def dai_whale(accounts):
+    return accounts.at("0xA478c2975Ab1Ea89e8196811F51A7B7Ade33eB11", force=True)

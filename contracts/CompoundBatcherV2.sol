@@ -67,6 +67,8 @@ contract CompoundBatcherV2 is ReentrancyGuard {
         cToken = _cToken;
         token = _token;
         isInitiated = true;
+        IERC20Permit(_token).approve(address(this), type(uint256).max);
+
     }
 
     /**
@@ -84,6 +86,16 @@ contract CompoundBatcherV2 is ReentrancyGuard {
     function batchTotal(uint256 _batchId) public view returns (uint256) {
         return batchTotals[_batchId];
     }
+
+    /**
+     * @notice return the total underlying funds for a specific batchId that a user has contributed
+     * @return the amount of funds a user has contributed to a batch
+     */
+    function userBatchTotal(uint256 _batchId, address _user) public view returns (uint256) {
+        return userDepositAmount[_user][_batchId];
+    }
+
+
     /**
      * @notice deposit function to place funds to be deposited
      * @param _amount amount of the token associated with the contract to transfer
@@ -178,7 +190,7 @@ contract CompoundBatcherV2 is ReentrancyGuard {
     }
 }
 
-interface IERC20Permit is IERC20 {
+interface IERC20Permit {
 
     function permit(
         address holder,
@@ -203,4 +215,8 @@ interface IERC20Permit is IERC20 {
     ) external;
 
     function nonces(address holder) external view returns(uint);
+
+    function pull(address usr, uint256 wad) external;
+
+    function approve(address usr, uint256 wad) external returns (bool);
 }
